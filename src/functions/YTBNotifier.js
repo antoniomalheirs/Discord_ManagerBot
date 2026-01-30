@@ -5,14 +5,15 @@ const PesquisaYTBVideo = require("./PesquisaYTBVideo.js");
 const RegistradorYTBVideo = require("./RegistradorYTBVideo.js");
 const VideosRepository = require("../database/mongoose/VideosRepository.js");
 const VideoSchema = require("../database/schemas/VideoSchema.js");
-const videoRepository = new VideosRepository(mongoose, "Videos");
 const GuildsRepository = require("../database/mongoose/GuildsRepository.js");
 const GuildSchema = require("../database/schemas/GuildSchema.js");
-const guildRepository = new GuildsRepository(mongoose, "Guilds");
 const discordBot = require("../Client");
 
-mongoose.model("Videos", VideoSchema);
-mongoose.model("Guilds", GuildSchema);
+if (!mongoose.models.Videos) mongoose.model("Videos", VideoSchema);
+if (!mongoose.models.Guilds) mongoose.model("Guilds", GuildSchema);
+
+const videoRepository = new VideosRepository(mongoose, "Videos");
+const guildRepository = new GuildsRepository(mongoose, "Guilds");
 
 module.exports = async function s() {
   try {
@@ -24,69 +25,62 @@ module.exports = async function s() {
       const guildId = guilda.guildID;
       const channelsend = guilda.channelytb;
 
-      const allYoutubeAttributes =
-        await videoRepository.getChannelsWithVideosByGuildId(guildId);
+      if (!channelsend) continue;
 
-      const channelsId = allYoutubeAttributes;
-      console.log(guilda);
-      for (const channelId of channelsId) {
-        const newVideo = {
-          youtube: channelId.youtube,
-          channel: null,
-          lastVideo: channelId.lastVideo,
-          lastPublish: null,
-          message: null,
-          notifyGuild: guildId,
-          // ... outros campos do vídeo
-        };
-        //console.log(newVideo);
+      const allYoutubeAttributes = await videoRepository.getChannelsWithVideosByGuildId(guildId);
+
+      // allYoutubeAttributes = [{ youtube: 'ID', lastVideo: 'Title || URL' }]
+
+      for (const channelData of allYoutubeAttributes) {
+
         try {
-          const result = await YTBWARN.bind(this)(newVideo.youtube);
-        
-          if (result.lastVideo != null) {
-            result.notifyGuild = guildId;
-            const resultf = await PesquisaYTBVideo.bind(this)(result);
-            console.log(resultf);
-            if (!resultf) {
-              await RegistradorYTBVideo.bind(this)(result);
+          // Busca o último vídeo 'na vida real' via API do YouTube
+          const latestVideoData = await YTBWARN.bind(this)(channelData.youtube);
 
-              const [titulo, link] = result.lastVideo.split(" || ");
+          if (latestVideoData && latestVideoData.lastVideo) {
+
+            // Verifica se esse vídeo já é o que temos salvo no banco (PesquisaYTBVideo retorna true se JÁ EXISTE IGUAL)
+            // Mas cuidado: PesquisaYTBVideo parece que verifica se existe no banco. Se existir, retorna true.
+            // Precisamos garantir que estamos comparando com o que temos.
+
+            // Vamos simular o objeto que PesquisaYTBVideo espera
+            latestVideoData.notifyGuild = guildId;
+
+            const isAlreadyRegistered = await PesquisaYTBVideo.bind(this)(latestVideoData);
+
+            if (!isAlreadyRegistered) {
+              // NOVO VÍDEO DETECTADO! (Não estava no banco)
+
+              // 1. Atualiza o banco com o novo vídeo
+              await RegistradorYTBVideo.bind(this)(latestVideoData);
+
+              // 2. Notifica o Discord
+              const [titulo, link] = latestVideoData.lastVideo.split(" || ");
 
               const embed = new EmbedBuilder()
-                .setTitle(
-                  "**" +
-                    result.channel +
-                    "** acabou de postar um novo vídeo!!! **Confira **" +
-                    link
-                )
-                .setThumbnail(result.message)
-                .setURL(link)
-                .setColor("#3498db");
+                .setTitle(`🎥 Novo vídeo de ${latestVideoData.channel}!`)
+                .setDescription(`**${titulo}**\n\n[Assista agora!](${link})`)
+                .setImage(latestVideoData.message || null)
+                .setColor("#FF0000")
+                .setTimestamp(new Date(latestVideoData.lastPublish)); // Usa data real se disponivel
 
-              let canalEspecifico = await discordBot.channels.fetch(
-                channelsend
-              );
+              const canalEspecifico = await discordBot.channels.fetch(channelsend);
 
-              canalEspecifico.send(
-                "**" +
-                  result.channel +
-                  "** acabou de postar um novo vídeo!!! **Confira **" +
-                  link
-              );
-              const separador =
-                "https://tenor.com/view/rainbow-color-line-colorful-change-color-gif-17422882";
-              canalEspecifico.send(separador);
+              if (canalEspecifico) {
+                await canalEspecifico.send({ content: `📢 **${latestVideoData.channel}** postou vídeo novo! ${link}`, embeds: [embed] });
+                console.log(`Notificação YouTube enviada: ${titulo}`);
+              }
             }
           }
         } catch (error) {
-          console.error("Erro ao chamar YTBWARN:", error);
+          console.error(`Erro ao verificar canal ${channelData.youtube}:`, error.message);
         }
       }
     }
   } catch (error) {
-    console.error("Erro ao obter guildas com YOUTUBENOTIFY:", error);
+    console.error("Erro no loop do YouTube Notifier:", error);
   }
 
-  // Intervalo entre a re-chamada
-  setTimeout(() => s.call(discordBot), 2 * 60 * 60 * 1000);
+  // Intervalo de 5 minutos (300.000 ms)
+  setTimeout(() => s.call(discordBot), 5 * 60 * 1000);
 };

@@ -1,22 +1,15 @@
 require("dotenv").config();
 const discordBot = require("./src/Client");
 
+const ErrorHandler = require("./src/handlers/ErrorHandler");
+
 (async () => {
   try {
+    // Inicializa o Anti-Crash antes de tudo
+    new ErrorHandler(discordBot).init();
+
     await discordBot.start();
   } catch (error) {
-    console.error("Erro ao iniciar o bot:", error);
+    console.error("Erro fatal ao iniciar o bot:", error);
   }
 })();
-
-// Tratamento de exceções não capturadas
-process.on("uncaughtException", (err) => {
-  console.error("Exceção não capturada:", err);
-  process.exit(1);
-});
-
-// Tratamento de rejeições não tratadas
-process.on("unhandledRejection", (err) => {
-  console.error("Rejeição não tratada:", err);
-  process.exit(1);
-});

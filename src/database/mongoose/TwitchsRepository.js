@@ -17,6 +17,7 @@ module.exports = class TwitchRepository extends Repository {
         twitch: entity.twitch,
         channel: entity.channel,
         guildID: entity.guildID,
+        isLive: entity.isLive,
         // ... outros campos da guilda
       };
     } else {
@@ -61,6 +62,10 @@ module.exports = class TwitchRepository extends Repository {
 
   update(twitch, entity, options = { upsert: true }) {
     return this.model.updateOne({ twitch }, { $set: entity }, options);
+  }
+
+  updateByTwitchAndGuildId(twitch, guildID, entity, options = { upsert: false }) {
+    return this.model.updateOne({ twitch, guildID }, { $set: entity }, options);
   }
 
   async verify(twitch) {

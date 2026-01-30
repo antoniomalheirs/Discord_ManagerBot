@@ -19,10 +19,26 @@ module.exports = class UserRepository extends Repository {
         voiceTime: entity.voiceTime || 0,
         totalMessages: entity.totalMessages || 0,
         idguild: entity.idguild || "nada encontrado",
-        // ... outros campos do usuário
+        money: entity.money || 0,
+        bank: entity.bank || 0,
+        lastDaily: entity.lastDaily || 0,
+        dailyStreak: entity.dailyStreak || 0,
+        lastWork: entity.lastWork || 0,
+        lastRob: entity.lastRob || 0,
+        lastInterestClaim: entity.lastInterestClaim || 0,
+        background: entity.background || "default",
+        ownedBackgrounds: entity.ownedBackgrounds || ["default"],
+        energy: entity.energy || 50,
+        lastEnergyUpdate: entity.lastEnergyUpdate || Date.now(),
+        inventory: entity.inventory || [],
+        protectionExpires: entity.protectionExpires || 0,
+        trollShieldExpires: entity.trollShieldExpires || 0,
+        job: entity.job || "Desempregado",
+        pets: entity.pets || [],
+        activePet: entity.activePet || "",
       };
     } else {
-      return null; // ou um objeto vazio, dependendo da preferência
+      return null;
     }
   }
 
@@ -63,7 +79,7 @@ module.exports = class UserRepository extends Repository {
         entity ? this.parse(entity) : this.add({ codigouser, idguild })
       );
   }
-  
+
 
   getAllUniqueYoutubeAttributes() {
     return this.model.distinct("codigouser").exec();
@@ -80,7 +96,7 @@ module.exports = class UserRepository extends Repository {
   updateByUserIdAndGuildId(codigouser, idguild, entity, options = { upsert: true }) {
     return this.model.updateOne({ codigouser, idguild }, entity, options);
   }
-  
+
 
   async verify(codigouser) {
     return !!(await this.model.findOne({ codigouser }));

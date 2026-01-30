@@ -20,7 +20,7 @@ module.exports = class GuildRepository extends Repository {
         channelytb: entity.channelytb,
         channeltch: entity.channeltch,
         twitchnotify: entity.twitchnotify,
-        // ... outros campos da guilda
+        logging: entity.logging || {}, // Garante que o objeto logging seja retornado
       };
     } else {
       return null; // ou um objeto vazio, dependendo da preferência

@@ -8,8 +8,8 @@ const GuildsRepository = require("../database/mongoose/GuildsRepository.js");
 const TwitchSchema = require("../database/schemas/TwitchSchema.js");
 const GuildSchema = require("../database/schemas/GuildSchema.js");
 
-mongoose.model("Twitchs", TwitchSchema);
-mongoose.model("Guilds", GuildSchema);
+if (!mongoose.models.Twitchs) mongoose.model("Twitchs", TwitchSchema);
+if (!mongoose.models.Guilds) mongoose.model("Guilds", GuildSchema);
 
 const twitchRepository = new TwitchsRepository(mongoose, "Twitchs");
 const guildRepository = new GuildsRepository(mongoose, "Guilds");
@@ -18,17 +18,25 @@ const clientId = process.env.TWITCH_CLIENTID;
 const clientSecret = process.env.TWITCH_SECRETID;
 
 async function isChannelLive(accessToken, channelId) {
-  const response = await axios.get("https://api.twitch.tv/helix/streams", {
-    params: {
-      user_id: channelId,
-    },
-    headers: {
-      "Client-ID": clientId,
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  return response.data.data.length > 0;
+  try {
+    const response = await axios.get("https://api.twitch.tv/helix/streams", {
+      params: {
+        user_id: channelId,
+      },
+      headers: {
+        "Client-ID": clientId,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    return response.data.data.length > 0;
+  } catch (error) {
+    if (error.response && error.response.status === 400) {
+      console.error(`Erro de Auth (400) para canal ${channelId}. Verifique ClientID/Secret.`);
+    } else {
+      console.error(`Erro ao checar status da live ${channelId}:`, error.message);
+    }
+    return false;
+  }
 }
 
 module.exports = async function p() {
@@ -38,39 +46,57 @@ module.exports = async function p() {
 
     for (const guilda of guildasComNotify) {
       const guildId = guilda.guildID;
-      const channelsend = guilda.channeltch;
+      const channelToSendId = guilda.channeltch;
+
+      if (!channelToSendId) continue;
 
       const allTwitchAttributes = await twitchRepository.findAllByGuildId(guildId);
 
-      for (const twitch of allTwitchAttributes) {
-        const channelTCH = {
-          twitch: twitch.twitch,
-          channel: twitch.channel,
-          guildID: twitch.lastVideo,
-          // ... outros campos do vídeo
-        };
+      for (const twitchData of allTwitchAttributes) {
 
-        try {
-          const isLive = await isChannelLive(accessToken, channelTCH.twitch);
+        const currentlyLive = await isChannelLive(accessToken, twitchData.twitch);
+        const wasLive = twitchData.isLive || false;
 
-          if (isLive) {
-            const twitchLink = `https://www.twitch.tv/${channelTCH.channel}`;
-            const canalEspecifico = await discordBot.channels.fetch(channelsend);
+        // Logs de Debug (Remover depois se ficar muito poluído)
+        // console.log(`[DEBUG TWITCH] ${twitchData.channel} (Guild: ${guildId}) | Live: ${currentlyLive} | WasLive: ${wasLive}`);
 
-            canalEspecifico.send(`** ${channelTCH.channel.toUpperCase()}** está em live! Confira em ${twitchLink}`);
-            console.log(`${channelTCH.channel.toUpperCase()} está em live! Confira em ${twitchLink}`);
+        // Lógica de Notificação e Atualização de Estado
+        if (currentlyLive && !wasLive) {
 
-            const separador = "https://tenor.com/view/rainbow-color-line-colorful-change-color-gif-17422882";
-            canalEspecifico.send(separador);
+          // ATUALIZA O BANCO PRIMEIRO para evitar race conditions ou duplicação se o send falhar/demorar
+          await twitchRepository.updateByTwitchAndGuildId(twitchData.twitch, guildId, { isLive: true });
+
+          try {
+            const twitchLink = `https://www.twitch.tv/${twitchData.channel}`;
+            const canalEspecifico = await discordBot.channels.fetch(channelToSendId);
+
+            if (canalEspecifico) {
+              await canalEspecifico.send(
+                `🟣 **${twitchData.channel}** está em live agora! Assista em: ${twitchLink}\nhttps://tenor.com/view/twitch-live-stream-gamers-gif-16167909`
+              );
+              console.log(`Notificação enviada: ${twitchData.channel} is LIVE! (Guild: ${guildId})`);
+            }
+          } catch (err) {
+            console.error("Erro ao enviar mensagem Discord:", err.message);
           }
-        } catch (error) {
-          console.error(`Erro ao obter token Twitch: ${error.message || error}`);
+
+        } else if (!currentlyLive && wasLive) {
+          // TERMINOU A LIVE (ON -> OFF)
+          await twitchRepository.updateByTwitchAndGuildId(twitchData.twitch, guildId, { isLive: false });
+          console.log(`Live terminou: ${twitchData.channel} (Guild: ${guildId})`);
+
+        } else if (currentlyLive && wasLive) {
+          // JA ESTA EM LIVE E JA SABEMOS
+          // Garante que o banco continua True (opcional, mas bom pra sanidade)
+          // console.log(`[DEBUG] ${twitchData.channel} continua em live...`);
         }
-        // Intervalo entre a re-chamada
+
       }
     }
   } catch (error) {
-    console.error("Erro ao obter guildas com YOUTUBENOTIFY:", error);
+    console.error("Erro no loop do Twitch Notifier:", error);
   }
-  setTimeout(p, 2 * 60 * 60 * 1000); // Call the function without 'call' method
+
+  // Intervalo de 5 minutos (300.000 ms)
+  setTimeout(p, 5 * 60 * 1000);
 };

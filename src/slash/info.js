@@ -1,42 +1,26 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const os = require('os');
+const { SlashCommandBuilder } = require("discord.js");
+const user = require("./info/user");
+const help = require("./info/help");
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('info')
-    // DESCRIÇÃO TRADUZIDA
-    .setDescription('Fornece informações sobre o bot.'),
-    
-  async execute(interaction) {
-    const { client } = interaction;
+    data: new SlashCommandBuilder()
+        .setName("info")
+        .setDescription("ℹ️ Centro de Informações")
+        .addSubcommand(sub =>
+            sub.setName("user")
+                .setDescription("👤 Ver informações de um usuário.")
+                .addUserOption(opt => opt.setName("user").setDescription("Usuário (opcional)"))
+        )
+        .addSubcommand(sub =>
+            sub.setName("help")
+                .setDescription("❓ Lista de comandos.")
+        ),
 
-    const ping = client.ws.ping;
-    
-    // LÓGICA DE UPTIME MELHORADA
-    const totalSeconds = os.uptime();
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = Math.floor(totalSeconds % 60);
-    const uptimeFormatted = `${days}d, ${hours}h, ${minutes}m, ${seconds}s`;
+    async execute(interaction) {
+        await interaction.deferReply();
+        const subcommand = interaction.options.getSubcommand();
 
-    const embed = new EmbedBuilder()
-      .setColor('#0099ff')
-      // TÍTULO TRADUZIDO
-      .setTitle('ℹ️ Informações do Bot')
-      .setThumbnail(client.user.displayAvatarURL())
-      .addFields(
-        // CAMPOS TRADUZIDOS
-        { name: 'Nome do Bot', value: client.user.username, inline: false },
-        { name: 'Ping', value: `\`${ping}ms\``, inline: false },
-        { name: 'Tempo de Atividade', value: uptimeFormatted, inline: false },
-        { name: 'Versão do Node.js', value: process.version, inline: false },
-        { name: 'Plataforma', value: `${os.platform()} (${os.arch()})`, inline: false }
-      )
-      // TEXTO DO FOOTER TRADUZIDO
-      .setFooter({ text: `Solicitado por ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
-      .setTimestamp();
-
-    await interaction.reply({ embeds: [embed] });
-  },
+        if (subcommand === "user") return user.execute(interaction);
+        if (subcommand === "help") return help.execute(interaction);
+    }
 };

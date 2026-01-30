@@ -32,6 +32,12 @@ class DiscordBot extends Client {
 
     // Adicione outros inicializadores aqui, se necessário
 
+    // Eventos de Conexão/Reconexão
+    this.on('shardReconnecting', (id) => console.log(`\x1b[33m[DISCORD]\x1b[0m Shard ${id} reconectando...`));
+    this.on('shardResume', (id, replayedEvents) => console.log(`\x1b[32m[DISCORD]\x1b[0m Shard ${id} resumiu a conexão.`));
+    this.on('shardDisconnect', (event, id) => console.warn(`\x1b[31m[DISCORD]\x1b[0m Shard ${id} desconectado.`));
+    this.on('error', error => console.error(`\x1b[31m[DISCORD]\x1b[0m Erro no Cliente:`, error));
+
     console.log("Bot está pronto para ser iniciado!");
     this.login(process.env.TOKEN);
   }
