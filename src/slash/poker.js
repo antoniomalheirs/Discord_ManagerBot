@@ -475,6 +475,10 @@ module.exports = {
                 table.turnIndex = (table.turnIndex + 1) % table.players.length;
                 skipAttempts++;
             }
+
+            if (skipAttempts >= table.players.length) {
+                return this.handleNextTurn(table, collector, msg, true);
+            }
         }
 
         // Update UI

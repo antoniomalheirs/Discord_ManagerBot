@@ -1,6 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, UserSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType } = require("discord.js");
 const mongoose = require("mongoose");
 const UserSchema = require("../../database/schemas/UserSchema");
+const { COLORS, SEP, formatMoney } = require("../../utils/EmbedStyle");
 
 if (!mongoose.models.Users) {
     mongoose.model("Users", UserSchema);
@@ -56,11 +57,11 @@ module.exports = {
         const buildMainEmbed = (user) => {
             return new EmbedBuilder()
                 .setTitle("🎰 Central do Cassino")
-                .setColor("#9B59B6")
+                .setColor(COLORS.CASINO)
                 .setThumbnail(interaction.user.displayAvatarURL())
-                .setDescription("Escolha um jogo para apostar!\n\n**Dica**: Use o menu para selecionar o jogo e depois defina sua aposta.")
+                .setDescription(`${SEP}\nEscolha um jogo para apostar!\n\n**Dica**: Use o menu para selecionar o jogo e depois defina sua aposta.\n${SEP}`)
                 .addFields(
-                    { name: "💵 Saldo", value: `$${(user.money || 0).toLocaleString()}`, inline: true },
+                    { name: "💵 Saldo", value: formatMoney(user.money || 0), inline: true },
                     { name: "⚡ Energia", value: `${user.energy || 50}/50`, inline: true },
                     { name: "🐾 Pet", value: user.activePet ? PETS[user.activePet]?.name : "Nenhum", inline: true }
                 )

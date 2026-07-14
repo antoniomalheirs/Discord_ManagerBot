@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const mongoose = require("mongoose");
+const { COLORS, SEP, cooldownMsg, formatMoney, progressBar } = require("../../utils/EmbedStyle");
 
 const DAY_MS = 86400000; // 24h
 const GRACE_MS = 172800000; // 48h (Streak reset tolerance)
@@ -29,10 +30,11 @@ module.exports = {
         // Check Cooldown
         if (now - lastDaily < DAY_MS) {
             const nextDaily = lastDaily + DAY_MS;
-            const diff = nextDaily - now;
-            const hours = Math.floor(diff / 3600000);
-            const minutes = Math.floor((diff % 3600000) / 60000);
-            return interaction.editReply(`⏳ **Calma lá!** Você já pegou seu daily hoje.\nVolte em **${hours}h ${minutes}m**.`);
+            const embed = new EmbedBuilder()
+                .setTitle("⏳ Cooldown Ativo")
+                .setColor(COLORS.WARNING)
+                .setDescription(`${SEP}\n${cooldownMsg(nextDaily)}\n\n🔥 **Streak Atual:** ${userData.dailyStreak || 0} Dias\n\`${progressBar(((userData.dailyStreak || 0) % 7) / 7)}\` (Bônus Semanal)`);
+            return interaction.editReply({ embeds: [embed] });
         }
 
         // Check Streak Logic - Calculate before atomic update
@@ -66,23 +68,29 @@ module.exports = {
 
         if (!result || result.lastDaily !== now) {
             // Already claimed today - race condition caught
-            return interaction.editReply(`⏳ **Calma lá!** Você já pegou seu daily hoje.`);
+            const embed = new EmbedBuilder()
+                .setTitle("⏳ Cooldown Ativo")
+                .setColor(COLORS.WARNING)
+                .setDescription(`Você já pegou seu daily hoje.`);
+            return interaction.editReply({ embeds: [embed] });
         }
 
         userData = result; // Use fresh data for weekly bonus check
 
         const embed = new EmbedBuilder()
             .setTitle("📅 Recompensa Diária")
-            .setColor("#00FF00")
-            .setDescription(`Você recebeu **$${reward.toLocaleString()}**!`)
+            .setColor(COLORS.SUCCESS)
+            .setDescription(`Você recebeu **${formatMoney(reward)}**!\n${SEP}`)
             .addFields(
                 { name: "🔥 Streak Atual", value: `${streak} Dias`, inline: true },
-                { name: "💰 Bônus de Streak", value: `$${streak * STREAK_BONUS}`, inline: true }
+                { name: "💰 Bônus de Streak", value: formatMoney(streak * STREAK_BONUS), inline: true },
+                { name: "🎁 Bônus Semanal", value: `\`${progressBar((streak % 7) / 7)}\``, inline: false }
             )
-            .setFooter({ text: "Volte amanhã para manter o combo!" });
+            .setFooter({ text: "Volte amanhã para manter o combo!" })
+            .setTimestamp();
 
         if (streak % 7 === 0 && streak > 0) {
-            embed.setDescription(`Você recebeu **$${reward.toLocaleString()}**!\n🎁 **BÔNUS SEMANAL!** Ganhou +20 Energia.`);
+            embed.setDescription(`Você recebeu **${formatMoney(reward)}**!\n🎁 **BÔNUS SEMANAL!** Ganhou +20 Energia.\n${SEP}`);
             userData.energy = Math.min((userData.energy || 0) + 20, 100); // Overcharge energy
             await userData.save();
         }

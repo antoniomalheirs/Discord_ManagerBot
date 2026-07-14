@@ -1,5 +1,4 @@
-const fetch = (...args) =>
-  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+// fetch é nativo do Node.js 18+ (não precisa de node-fetch)
 
 module.exports = async function (channelName) {
   try {

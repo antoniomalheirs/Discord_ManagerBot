@@ -314,28 +314,15 @@ class PokerTable {
     // ... processAI ...
 
     resolveShowdown() {
-        // Filter Active Players (Not Folded)
-        // Folded players lose everything they put in.
-
         let candidates = this.players.filter(p => !p.folded);
         if (candidates.length === 0) return []; // Should not happen
 
-        // Calculate Hand Strength for everyone active
         candidates.forEach(p => {
             p.eval = Hand.evaluate([...p.hand, ...this.communityCards]);
-            p.winnings = 0; // Init winnings
-            p.remainingClaim = p.totalHandBet; // Amount they can win from each other person
+            p.winnings = 0;
+            p.remainingClaim = p.totalHandBet; 
         });
 
-        // Add Folder players to "Money Source" but not as winners
-        // Actually, we process pot by iterating contributions.
-
-        // Better Algorithm (Side Pot Logic):
-        // 1. Create list of all pots (Main + Sides).
-        // OR: Distribute iteratively.
-
-        // Iterative Approach:
-        // Sort Candidates by Strength (Best to Worst)
         candidates.sort((a, b) => {
             if (b.eval.rank !== a.eval.rank) return b.eval.rank - a.eval.rank;
             for (let i = 0; i < 5; i++) {
@@ -346,89 +333,50 @@ class PokerTable {
             return 0;
         });
 
-        // We also need a list of ALL players (including folded) to take money FROM.
-        // Copy their total bets to a mutable 'contribution' tracker.
-        const contributions = this.players.map(p => ({ id: p.id, amount: p.totalHandBet }));
+        let contributions = this.players.map(p => ({ id: p.id, amount: p.totalHandBet }));
+        contributions = contributions.filter(c => c.amount > 0);
 
-        let totalDistributed = 0;
-        const results = [];
-
-        // Loop through winners (candidates) from Best to Worst
-        for (let i = 0; i < candidates.length; i++) {
-            const winner = candidates[i];
-            if (winner.remainingClaim <= 0) continue; // Already fully paid (or covered)
-
-            // Find ties
-            const tiedWinners = [winner];
-            for (let j = i + 1; j < candidates.length; j++) {
-                const next = candidates[j];
-                // Check equality logic (same as sort)
-                let isTie = false;
-                if (next.eval.rank === winner.eval.rank) {
-                    let cardTie = true;
-                    for (let k = 0; k < 5; k++) {
-                        if (next.eval.cards[k].numericValue !== winner.eval.cards[k].numericValue) {
-                            cardTie = false; break;
-                        }
-                    }
-                    if (cardTie) isTie = true;
+        while (candidates.length > 0 && contributions.length > 0) {
+            const bestHand = candidates[0];
+            const tiedWinners = candidates.filter(c => {
+                if (c.eval.rank !== bestHand.eval.rank) return false;
+                for (let i = 0; i < 5; i++) {
+                    if (c.eval.cards[i].numericValue !== bestHand.eval.cards[i].numericValue) return false;
                 }
-
-                if (isTie) tiedWinners.push(next);
-                else break;
-            }
-
-            // Determine the "Cap" for this pot level
-            // The cap is the smallest 'remainingClaim' among the tied winners
-            // (Actually, usually side pots are defined by the smallest ALL-IN amount)
-            // But here we iterate top-down.
-            // If the best hand has only bet 50, he can only take 50 from everyone.
-
-            // Find min claim among tied winners who still have a claim
-            let minClaim = Math.min(...tiedWinners.filter(w => w.remainingClaim > 0).map(w => w.remainingClaim));
-
-            // Collect this amount from everyone's AVAILABLE contributions
-            let potForThisLevel = 0;
-            contributions.forEach(c => {
-                const take = Math.min(c.amount, minClaim);
-                c.amount -= take;
-                potForThisLevel += take;
+                return true;
             });
 
-            if (potForThisLevel > 0) {
-                // Split among tied winners
-                const share = Math.floor(potForThisLevel / tiedWinners.length);
+            const cap = Math.min(...tiedWinners.map(w => w.remainingClaim));
+
+            let potPart = 0;
+            contributions.forEach(c => {
+                const take = Math.min(c.amount, cap);
+                c.amount -= take;
+                potPart += take;
+            });
+
+            if (potPart > 0) {
+                const share = Math.floor(potPart / tiedWinners.length);
                 tiedWinners.forEach(w => {
                     w.winnings += share;
-                    // Deduct from their claim?
-                    // Logic check: If I bet 50 and win against someone who bet 100.
-                    // I take 50 from him. My claim satisfied.
-                    // He has 50 left. Next winner takes it.
-                    // So we must reduce the 'remainingClaim' of the winners by the amount 'minClaim' we just processed.
-                    w.remainingClaim -= minClaim;
                 });
             }
 
-            // Skip the rest of tied winners in the outer loop to avoid double processing?
-            // No, the inner loop just grouped them for THIS pot level.
-            // We need to advance 'i' carefully, BUT 'remainingClaim' handles logic.
-            // If w.remainingClaim becomes 0, he is skipped next time.
-            // However, typical side pot logic runs one 'pot' at a time.
-            // Simplified: We processed 'minClaim' slice of the pot for THOSE winners.
-            // If they still have claim (because minClaim was limited by someone else?), they stay candidates for next slice?
-            // Actually, if we use minClaim from the winners themselves, at least one winner is satisfied/capped.
+            contributions = contributions.filter(c => c.amount > 0);
+
+            tiedWinners.forEach(w => {
+                w.remainingClaim -= cap;
+            });
+            candidates = candidates.filter(c => c.remainingClaim > 0);
         }
 
-        // Prepare Output
-        // Return active players with their total winnings > 0
-        const winners = candidates.filter(p => p.winnings > 0).map(p => ({
+        const winners = this.players.filter(p => p.winnings > 0).map(p => ({
             player: p,
             hand: p.eval,
-            splitAmount: p.winnings, // Total Won
-            chipsBefore: p.chips, // Debug
+            splitAmount: p.winnings,
+            chipsBefore: p.chips
         }));
 
-        // Update Chips exactly
         winners.forEach(w => {
             w.player.chips += w.splitAmount;
         });

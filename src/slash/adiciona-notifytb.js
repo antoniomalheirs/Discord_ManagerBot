@@ -1,59 +1,96 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require("discord.js");
 const mongoose = require("mongoose");
-const VideoSchema = require("../database/schemas/VideoSchema.js");
-const VideosRepository = require("../database/mongoose/VideosRepository.js");
-const YTBCHANNELTOID = require("../utils/YTBCHANNELTOID.js");
-const RegistradorYTBVideo = require("../functions/RegistradorYTBVideo.js");
-mongoose.model("Videos", VideoSchema);
+const { PesquisaYTBVideo } = require("../functions/PesquisaYTBVideo");
+const YTBCHANNELTOID = require("../utils/YTBCHANNELTOID");
+const { success, error, warning } = require("../utils/EmbedStyle");
+const GuildSchema = require("../database/schemas/GuildSchema");
+
+// Evitar re-registro do modelo
+if (!mongoose.models.Guilds) {
+    mongoose.model("Guilds", GuildSchema);
+}
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("adicionaryoutube")
-    .setDescription(
-      "Adiciona um canal do YouTube para receber notificações no canal de vídeos"
-    )
-    .addStringOption((option) =>
-      option
-        .setName("canal")
-        .setDescription("Nome do canal do YouTube")
-        .setRequired(true)
-    ),
-  // Define a permissão padrão como 'false'
+    data: new SlashCommandBuilder()
+        .setName("youtube-notifier")
+        .setDescription("Avisa sobre os vídeos do YT")
+        .addStringOption(option => 
+            option.setName("url").setDescription("URL/ID/Tag do canal do YouTube").setRequired(true)
+        )
+        .addChannelOption(option => 
+            option.setName("canal").setDescription("Canal que será enviada as mensagens").setRequired(true)
+        )
+        .addStringOption(option => 
+            option.setName("mensagem").setDescription("Mensagem customizada. Use {url} {titulo} {autor}").setRequired(false)
+        ),
 
-  async execute(interaction) {
-    // Obter o valor do parâmetro 'canal' fornecido pelo usuário
-    const channelInput = interaction.options.getString("canal");
+    async execute(interaction) {
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({
+                embeds: [error("Acesso Negado", "Você precisa de permissão de Administrador.")],
+                ephemeral: true
+            });
+        }
 
-    const videoRepository = new VideosRepository(mongoose, "Videos");
+        await interaction.deferReply({ ephemeral: true });
 
-    if (channelInput != null) {
-      const videoId = channelInput;
-      const projection = {
-        youtube: 1,
-        channel: 1,
-        lastVideo: 1,
-        lastPublish: 1,
-        message: 1,
-        notifyGuild: 1,
-      };
+        const urlInput = interaction.options.getString("url");
+        const canal = interaction.options.getChannel("canal");
+        const mensagemCustom = interaction.options.getString("mensagem") || "Vídeo Novo Pessoal!\n{url}";
 
-      const guildId = interaction.guild?.id;
+        try {
+            // Conversão de URL/Handle para ID usando a utility refatorada (sem yt-search)
+            let finalId = urlInput;
+            if (urlInput.includes("youtube.com") || urlInput.startsWith("@")) {
+                const convertedId = await YTBCHANNELTOID(urlInput);
+                if (!convertedId) {
+                    return interaction.editReply({
+                        embeds: [error("Canal Inválido", "Não foi possível encontrar este canal. Verifique o link ou a tag (`@canal`).")]
+                    });
+                }
+                finalId = convertedId;
+            }
 
-      const noBanco = await videoRepository.findByYoutubeAndGuildId(videoId, guildId, projection);
+            const GuildModel = mongoose.model("Guilds");
+            const guildId = interaction.guildId;
 
-      if (noBanco != null) {
-        return interaction.reply(
-          "Esse canal já foi adicionado anteriormente, Por favor, informe outro canal!"
-        );
-      } else {
-        const result = await YTBCHANNELTOID.bind(this)(videoId);
-        console.log(result);
-        result.notifyGuild = guildId;
-        await RegistradorYTBVideo.bind(this)(result);
-        return interaction.reply(
-          `O canal ${result.channel} foi listado. Fica suave, vamos tocar no radin quando sair videozao novo!`
-        ); // Retorna false quando não existe
-      }
+            let guildData = await GuildModel.findOne({ guildID: guildId });
+            if (!guildData) {
+                guildData = new GuildModel({ guildID: guildId, youtubeChannels: [] });
+            }
+
+            if (!guildData.youtubeChannels) {
+                guildData.youtubeChannels = [];
+            }
+
+            const exists = guildData.youtubeChannels.find(ch => ch.channelId === finalId);
+            if (exists) {
+                return interaction.editReply({
+                    embeds: [warning("Canal já Cadastrado", `Este canal do YouTube já está sendo notificado no canal <#${exists.discordChannel}>.`)]
+                });
+            }
+
+            const lastVideoId = await PesquisaYTBVideo(finalId);
+
+            const newChannelConfig = {
+                channelId: finalId,
+                discordChannel: canal.id,
+                message: mensagemCustom,
+                lastVideoId: lastVideoId || ""
+            };
+
+            guildData.youtubeChannels.push(newChannelConfig);
+            await guildData.save();
+
+            interaction.editReply({
+                embeds: [success("YouTube Notifier Ativado", `Notificações configuradas para enviar em <#${canal.id}> quando novos vídeos saírem.`)]
+            });
+
+        } catch (err) {
+            console.error("Erro no youtube-notifier:", err);
+            interaction.editReply({
+                embeds: [error("Erro Interno", "Houve um problema ao configurar o notificador do YouTube.")]
+            });
+        }
     }
-  },
 };

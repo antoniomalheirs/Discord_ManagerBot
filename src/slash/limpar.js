@@ -1,55 +1,68 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder, PermissionsBitField } = require("discord.js");
+const { COLORS, success, error, warning } = require("../utils/EmbedStyle");
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("limpa")
-        .setDescription("Limpa mensagens do canal atual")
-        .addIntegerOption(option =>
-            option
-                .setName("quant")
-                .setDescription("Número de mensagens a excluir (1 a 100)")
-                .setRequired(true)
-        )
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+  data: new SlashCommandBuilder()
+    .setName("limpar")
+    .setDescription("🧹 Apaga mensagens de um canal (Apenas Administradores).")
+    .addIntegerOption((option) =>
+      option
+        .setName("quantidade")
+        .setDescription("Número de mensagens a serem apagadas (1 a 100)")
+        .setRequired(true)
+    ),
 
-    async execute(interaction) {
-        try {
-            const quantidade = interaction.options.getInteger("quant");
+  async execute(interaction) {
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+      return interaction.reply({
+        embeds: [error("Acesso Negado", "Você não tem permissão para usar este comando. (Requer: `Gerenciar Mensagens`)")],
+        ephemeral: true, 
+      });
+    }
 
-            if (quantidade < 1 || quantidade > 100) {
-                return interaction.reply({
-                    content: "❌ Forneça um número entre **1** e **100**.",
-                    ephemeral: true,
-                });
-            }
+    const quantidade = interaction.options.getInteger("quantidade");
 
-            await interaction.deferReply({ ephemeral: true });
+    if (quantidade < 1 || quantidade > 100) {
+      return interaction.reply({
+        embeds: [warning("Atenção", "Por favor, insira um número entre **1 e 100**.")],
+        ephemeral: true,
+      });
+    }
 
-            const canal = interaction.channel;
+    try {
+      await interaction.deferReply({ ephemeral: true });
 
-            // Busca mensagens (inclui a do comando, por isso +1)
-            const mensagens = await canal.messages.fetch({ limit: quantidade + 1 });
+      const canal = interaction.channel;
+      const mensagens = await canal.messages.fetch({ limit: quantidade + 1 });
 
-            // Filtra mensagens mais antigas que 14 dias
-            const mensagensValidas = mensagens.filter(
-                msg => Date.now() - msg.createdTimestamp < 14 * 24 * 60 * 60 * 1000
-            );
+      const mensagensValidas = mensagens.filter(
+          msg => Date.now() - msg.createdTimestamp < 14 * 24 * 60 * 60 * 1000
+      );
 
-            if (mensagensValidas.size < 1) {
-                return interaction.editReply("⚠️ Não há mensagens recentes para apagar (máx. 14 dias).");
-            }
+      if (mensagensValidas.size < 1) {
+          return interaction.editReply({
+            embeds: [warning("Nenhuma Mensagem Apagada", "Não haviam mensagens recentes (menores que 14 dias) para apagar.")]
+          });
+      }
 
-            await canal.bulkDelete(mensagensValidas, true);
+      await canal.bulkDelete(mensagensValidas, true);
 
-            return interaction.editReply(
-                `✅ Foram excluídas **${mensagensValidas.size}** mensagens no canal.`
-            );
-        } catch (error) {
-            console.error("Erro ao limpar canal:", error);
-            return interaction.reply({
-                content: "❌ Ocorreu um erro ao tentar limpar mensagens.",
-                ephemeral: true,
-            });
-        }
-    },
+      return interaction.editReply({
+        embeds: [success("Limpeza Concluída", `🧹 **${mensagensValidas.size}** mensagens foram apagadas com sucesso!`)],
+      });
+
+    } catch (err) {
+      console.error("Erro ao limpar mensagens:", err);
+      if (interaction.deferred || interaction.replied) {
+        return interaction.editReply({
+          embeds: [error("Erro na Limpeza", "Ocorreu um erro ao tentar apagar as mensagens.")],
+        });
+      } else {
+        return interaction.reply({
+          embeds: [error("Erro na Limpeza", "Ocorreu um erro ao tentar apagar as mensagens.")],
+          ephemeral: true
+        });
+      }
+    }
+  },
 };

@@ -1,85 +1,66 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const mongoose = require("mongoose");
-const UsersRepository = require("../database/mongoose/UsersRepository");
-const UserSchema = require("../database/schemas/UserSchema");
-
-// Registra o schema apenas uma vez
-if (!mongoose.models.Users) {
-  mongoose.model("Users", UserSchema);
-}
+const { COLORS, SEP, error } = require("../utils/EmbedStyle");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("userinfo")
-    .setDescription("Exibe informações detalhadas sobre o seu perfil."),
+    .setDescription("👤 Mostra informações de um usuário.")
+    .addUserOption((option) =>
+      option.setName("usuario").setDescription("Usuário para ver informações").setRequired(false)
+    ),
 
   async execute(interaction) {
     try {
-      const userId = interaction.user.id;
-      const projection = {
-        codigouser: 1,
-        voiceTime: 1,
-        totalMessages: 1,
-      };
+      await interaction.deferReply();
 
-      // Repositório de usuários
-      const userRepo = new UsersRepository(mongoose, "Users");
-      const userData = await userRepo.findOne(userId, projection);
+      const user = interaction.options.getUser("usuario") || interaction.user;
+      const member = await interaction.guild.members.fetch(user.id).catch(() => null);
 
-      // Garantir dados mesmo se não existir no banco
-      const totalMessages = userData?.totalMessages || 0;
-      const totalVoiceTime = userData?.voiceTime || 0;
+      if (!member) {
+          return interaction.editReply({ embeds: [error("Erro", "Não foi possível encontrar este usuário no servidor.")] });
+      }
 
-      // Informações do membro no servidor
-      const member = interaction.member;
-      const userRoles =
-        member.roles.cache
-          .filter((role) => role.name !== "@everyone")
-          .map((role) => role.name)
-          .join(", ") || "Nenhum cargo";
+      const userName = user.username;
+      const userTag = user.discriminator !== '0' ? `#${user.discriminator}` : '';
+      const userAvatar = user.displayAvatarURL({ dynamic: true, size: 1024 });
 
-      const userJoinDate = member.joinedAt
-        ? member.joinedAt.toLocaleDateString("pt-BR")
-        : "Não disponível";
+      // Buscar banner se existir
+      await user.fetch();
+      const userBanner = user.bannerURL({ dynamic: true, size: 1024 });
 
-      // Embed visualmente mais elegante
+      const joinedServer = `<t:${Math.floor(member.joinedTimestamp / 1000)}:D> (<t:${Math.floor(member.joinedTimestamp / 1000)}:R>)`;
+      const accountCreated = `<t:${Math.floor(user.createdTimestamp / 1000)}:D> (<t:${Math.floor(user.createdTimestamp / 1000)}:R>)`;
+
+      const roles = member.roles.cache
+        .filter((role) => role.name !== "@everyone")
+        .map((role) => `<@&${role.id}>`)
+        .join(", ");
+
       const embed = new EmbedBuilder()
-        .setColor("#5865F2") // Azul padrão do Discord
-        .setAuthor({
-          name: `${interaction.user.username}`,
-          iconURL: interaction.user.displayAvatarURL({ dynamic: true }),
-        })
-        .setTitle("📊 Informações do Usuário")
-        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 1024 }))
+        .setColor(COLORS.INFO)
+        .setTitle(`👤 Informações de ${userName}${userTag}`)
+        .setThumbnail(userAvatar)
+        .setDescription(`${SEP}`)
         .addFields(
-          { name: "👤 Usuário", value: `${interaction.user}`, inline: true },
-          { name: "🆔 ID", value: `\`${interaction.user.id}\``, inline: true },
-          { name: "📅 Entrada no servidor", value: userJoinDate, inline: false },
-          { name: "🏷️ Cargos", value: userRoles, inline: false },
-          { name: "💬 Mensagens enviadas", value: `${totalMessages.toLocaleString("pt-BR")}`, inline: true },
-          { name: "🎙️ Tempo em voz", value: `${totalVoiceTime.toLocaleString("pt-BR")} minutos`, inline: true },
+          { name: "📅 Conta Criada", value: accountCreated, inline: false },
+          { name: "📥 Entrou no Servidor", value: joinedServer, inline: false },
+          { name: `🎭 Cargos [${member.roles.cache.size - 1}]`, value: roles || "Nenhum cargo", inline: false }
         )
-        .setFooter({
-          text: `Solicitado por ${interaction.user.tag}`,
-          iconURL: interaction.user.displayAvatarURL({ dynamic: true }),
-        })
+        .setFooter({ text: `ID do Usuário: ${user.id}` })
         .setTimestamp();
 
-      // Responde ou edita conforme necessário
+      if (userBanner) {
+          embed.setImage(userBanner);
+      }
+
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ embeds: [embed] });
       } else {
         await interaction.reply({ embeds: [embed] });
       }
-    } catch (error) {
-      console.error("Erro ao obter informações do usuário:", error);
-
-      const errorMsg = {
-        content:
-          "⚠️ Ocorreu um erro ao buscar suas informações. Tente novamente mais tarde.",
-        ephemeral: true,
-      };
-
+    } catch (err) {
+      console.error("Erro no comando userinfo:", err);
+      const errorMsg = { embeds: [error("Erro", "Ocorreu um erro ao obter informações do usuário.")] };
       if (interaction.deferred || interaction.replied) {
         await interaction.followUp(errorMsg);
       } else {

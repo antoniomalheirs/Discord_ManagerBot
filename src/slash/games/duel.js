@@ -1,5 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require("discord.js");
 const mongoose = require("mongoose");
+const { COLORS, SEP, formatMoney, error } = require("../../utils/EmbedStyle");
 
 const TAX_RATE = 0.05; // 5%
 
@@ -37,8 +38,8 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setTitle(`⚔️ DESAFIO DE X1: ${gameName}`)
-            .setDescription(`<@${challenger.id}> desafiou <@${opponent.id}> para um duelo!\n\n💰 **Aposta:** $${amount.toLocaleString()} (Total: $${(amount * 2).toLocaleString()})\n📜 **Taxa da Casa:** 5%`)
-            .setColor("#FF0000")
+            .setDescription(`${SEP}\n<@${challenger.id}> desafiou <@${opponent.id}> para um duelo!\n\n💰 **Aposta:** ${formatMoney(amount)} (Total: ${formatMoney(amount * 2)})\n📜 **Taxa da Casa:** 5%\n${SEP}`)
+            .setColor(COLORS.CASINO)
             .setThumbnail("https://media.giphy.com/media/26FFDckvIXxpwWcTK/giphy.gif");
 
         const row = new ActionRowBuilder()

@@ -118,19 +118,30 @@ class Hand {
             counts[c.numericValue] = (counts[c.numericValue] || 0) + 1;
         }
 
-        let four = 0, three = 0, pairs = [];
+        let four = 0, three = [], pairs = [];
         for (let val in counts) {
             if (counts[val] === 4) four = parseInt(val);
-            if (counts[val] === 3) three = parseInt(val); // Keeps highest if 2 sets? No standard deck.
+            if (counts[val] === 3) three.push(parseInt(val));
             if (counts[val] === 2) pairs.push(parseInt(val));
         }
 
+        three.sort((a, b) => b - a);
         pairs.sort((a, b) => b - a);
+
+        let highestThree = three.length > 0 ? three[0] : 0;
+        let highestPair = 0;
+        
+        if (three.length > 1) {
+            // Se tem duas trincas, a menor atua como um par para o Full House
+            highestPair = three[1];
+        } else if (pairs.length > 0) {
+            highestPair = pairs[0];
+        }
 
         return {
             four,
-            three,
-            pair: pairs.length > 0 ? pairs[0] : 0,
+            three: highestThree,
+            pair: highestPair,
             twoPair: pairs.length >= 2 ? pairs : null
         };
     }

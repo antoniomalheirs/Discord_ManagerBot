@@ -1,6 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, UserSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType, PermissionsBitField } = require("discord.js");
 const mongoose = require("mongoose");
 const UserSchema = require("../../database/schemas/UserSchema");
+const { COLORS, SEP } = require("../../utils/EmbedStyle");
 
 if (!mongoose.models.Users) {
     mongoose.model("Users", UserSchema);
@@ -17,9 +18,9 @@ module.exports = {
             const guild = interaction.guild;
             return new EmbedBuilder()
                 .setTitle("🛡️ Painel Admin Central")
-                .setColor("#2C3E50")
+                .setColor(COLORS.ADMIN)
                 .setThumbnail(guild.iconURL())
-                .setDescription(`Bem-vindo, Administrador **${interaction.user.username}**.\nControle total do servidor em suas mãos.`)
+                .setDescription(`${SEP}\nBem-vindo, Administrador **${interaction.user.username}**.\nControle total do servidor em suas mãos.\n${SEP}`)
                 .addFields(
                     { name: "👥 Membros", value: `${guild.memberCount}`, inline: true },
                     { name: "🤖 Ping Bot", value: `${interaction.client.ws.ping}ms`, inline: true },

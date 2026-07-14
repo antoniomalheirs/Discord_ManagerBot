@@ -7,16 +7,34 @@ module.exports = class ErrorHandler {
     }
 
     async init() {
+        const sendToWebhook = async (title, err) => {
+            if (!process.env.ERROR_WEBHOOK) return;
+            const axios = require("axios");
+            const errorMessage = err instanceof Error ? err.stack : String(err);
+            try {
+                await axios.post(process.env.ERROR_WEBHOOK, {
+                    embeds: [{
+                        title: title,
+                        description: `\`\`\`js\n${errorMessage.slice(0, 4000)}\n\`\`\``,
+                        color: 16711680,
+                        timestamp: new Date().toISOString()
+                    }]
+                });
+            } catch (e) {
+                console.error("Falha ao enviar log pro Webhook", e.message);
+            }
+        };
+
         process.on('unhandledRejection', (reason, promise) => {
             console.error(' [ANTI-CRASH] :: Unhandled Rejection/Catch');
             console.error(reason, promise);
-            // Opcional: Enviar para um webhook ou canal de logs
+            sendToWebhook('Unhandled Rejection/Catch', reason);
         });
 
         process.on('uncaughtException', (err, origin) => {
             console.error(' [ANTI-CRASH] :: Uncaught Exception/Catch');
             console.error(err, origin);
-            // Em erros críticos, talvez seja melhor reiniciar, mas aqui tentamos manter vivo
+            sendToWebhook('Uncaught Exception/Catch', err);
         });
 
         process.on('uncaughtExceptionMonitor', (err, origin) => {

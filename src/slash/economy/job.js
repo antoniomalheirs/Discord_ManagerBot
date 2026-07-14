@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require("discord.js");
 const mongoose = require("mongoose");
 const JOBS = require("../../utils/jobs");
+const { COLORS, SEP, error, success } = require("../../utils/EmbedStyle");
 
 module.exports = {
     async execute(interaction) {
@@ -11,7 +12,7 @@ module.exports = {
         const UserModel = mongoose.model("Users");
         let userData = await UserModel.findOne({ codigouser: userId, idguild: guildId });
 
-        if (!userData) return interaction.editReply("❌ Você não tem registro. Use `/casino welcome`.");
+        if (!userData) return interaction.editReply({ embeds: [error("Erro", "Você não tem registro. Use `/casino welcome`.")] });
 
         // Calc Level
         const msgs = userData.totalMessages || 0;
@@ -22,14 +23,14 @@ module.exports = {
         if (subcommand === "info") {
             const embed = new EmbedBuilder()
                 .setTitle("👔 Mercado de Trabalho")
-                .setColor("#3498DB")
-                .setDescription(`Seu Nível Atual: **${level}**\n\n**Profissões Disponíveis:**`);
+                .setColor(COLORS.INFO)
+                .setDescription(`${SEP}\nSeu Nível Atual: **${level}**\n\n**Profissões Disponíveis:**\n${SEP}`);
 
             for (const [jobName, jobData] of Object.entries(JOBS)) {
                 const status = level >= jobData.minLevel ? "✅ Desbloqueado" : `🔒 Requer Lvl ${jobData.minLevel}`;
                 embed.addFields({
-                    name: `${jobName} (${status})`,
-                    value: `${jobData.description}`,
+                    name: `👔 ${jobName} (${status})`,
+                    value: `\`\`\`\n${jobData.description}\n\`\`\``,
                     inline: false
                 });
             }
@@ -50,13 +51,13 @@ module.exports = {
             }
 
             if (bestJob === userData.job) {
-                return interaction.editReply(`😐 Você já está no topo da sua carreira possível (**${userData.job || "Desempregado"}**). Upe mais nível!`);
+                return interaction.editReply({ embeds: [error("Sem Promoção", `Você já está no topo da sua carreira possível (**${userData.job || "Desempregado"}**). Upe mais de nível!`)] });
             }
 
             userData.job = bestJob;
             await userData.save();
 
-            return interaction.editReply(`🎉 **PROMOÇÃO!**\nAgora você trabalha como **${bestJob}**!\nConfira seus novos benefícios em \`/economy job info\`.`);
+            return interaction.editReply({ embeds: [success("🎉 PROMOÇÃO!", `Agora você trabalha como **${bestJob}**!\nConfira seus novos benefícios em \`/economy job info\`.`)] });
         }
     }
 };

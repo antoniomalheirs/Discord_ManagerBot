@@ -9,7 +9,6 @@ const {
 class DiscordBot extends Client {
   constructor() {
     super({
-      intents: 8,
       failIfNotExists: false,
       intents: [
         GatewayIntentBits.Guilds,
@@ -39,7 +38,7 @@ class DiscordBot extends Client {
     this.on('error', error => console.error(`\x1b[31m[DISCORD]\x1b[0m Erro no Cliente:`, error));
 
     console.log("Bot está pronto para ser iniciado!");
-    this.login(process.env.TOKEN);
+    this.login(process.env.DISCORD_TOKEN || process.env.TOKEN);
   }
 
   setCommands(commands) {

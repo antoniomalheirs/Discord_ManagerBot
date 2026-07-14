@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require("discord.js");
+const { COLORS, SEP, formatMoney } = require("../../utils/EmbedStyle");
 
 const RACERS = ["🏎️", "🚗", "🚕", "🚙", "🚐"];
 const TRACK_LENGTH = 15;
@@ -31,8 +32,8 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setTitle("🏁 Corrida Iniciada!")
-            .setColor("#F1C40F")
-            .setDescription(generateTrack());
+            .setColor(COLORS.CASINO)
+            .setDescription(`${SEP}\n${generateTrack()}\n${SEP}`);
 
         const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
 

@@ -27,5 +27,8 @@ module.exports = new Schema({
     tickets: { type: [String], default: [] }, // Array of user IDs
     lastWinner: { type: String, default: "Ninguém" }
   },
+  casino: {
+    jackpot: { type: Number, default: 0 }
+  },
   poker: { channel: { type: String, default: "" }, state: { type: Boolean, default: false } }, // Moved to Root
 });

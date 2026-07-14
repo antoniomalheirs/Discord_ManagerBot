@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { COLORS, SEP } = require("../utils/EmbedStyle");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -13,9 +14,9 @@ module.exports = {
       
       // Constrói a base do nosso Embed
       const helpEmbed = new EmbedBuilder()
-        .setColor("#dc143c")
+        .setColor(COLORS.INFO)
         .setTitle("🤖 Central de Ajuda do Bot")
-        .setDescription(`Olá ${interaction.user}! Aqui está a lista de todos os comandos que você pode usar.\nClique em um comando para autocompletar!`)
+        .setDescription(`Olá ${interaction.user}! Aqui está a lista de todos os comandos que você pode usar.\nClique em um comando para autocompletar!\n${SEP}`)
         // --- AQUI ESTÁ A LINHA QUE ADICIONA A IMAGEM DO SERVIDOR AO LADO ---
         .setThumbnail(interaction.guild.iconURL({ dynamic: true, size: 512 }));
 

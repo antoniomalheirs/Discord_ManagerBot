@@ -1,29 +1,38 @@
 // Importa os construtores necessários do discord.js
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { COLORS } = require("../utils/EmbedStyle");
 
-// Importa nossa lista de piadas do arquivo JSON
-const piadas = require("./piadas.json");
+const VIBRANT_COLORS = [COLORS.PRIMARY, COLORS.SUCCESS, COLORS.WARNING, COLORS.ECONOMY, COLORS.CASINO, COLORS.INFO, COLORS.RANK];
 
 module.exports = {
   // Configuração do comando
   data: new SlashCommandBuilder()
     .setName("fun")
-    .setDescription("Envia uma piada aleatória para você rir!"), // Descrição melhorada
+    .setDescription("🎮 Um comando divertido aleatório!"),
 
   // Lógica de execução do comando
-  async execute(interaction) { // Corrigido de "interation" para "interaction"
+  async execute(interaction) {
     try {
-      // Escolhe uma piada aleatória do nosso array
-      const piadaAleatoria = piadas[Math.floor(Math.random() * piadas.length)];
+      const phrases = [
+        "Por que o livro de matemática se suicidou? Porque tinha muitos problemas.",
+        "O que o zero disse para o oito? Belo cinto!",
+        "Por que o computador foi ao médico? Porque estava com um vírus!",
+        "Qual é o animal mais antigo? A zebra, porque está em preto e branco.",
+        "Como as abelhas vão para a escola? De zumbinibus!",
+      ];
+
+      const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+      const randomColor = VIBRANT_COLORS[Math.floor(Math.random() * VIBRANT_COLORS.length)];
 
       // Cria um Embed para uma resposta visualmente mais interessante
       const embed = new EmbedBuilder()
-        .setColor("#FFC300") // Uma cor amarela divertida
-        .setTitle("🤣 Hora da Piada!")
-        .setDescription(`${interaction.user}, aqui vai uma:\n\n**${piadaAleatoria}**`) // Usa a piada no corpo do embed e menciona o usuário
-        .setImage("https://i.giphy.com/media/3o6vY6fT3kSStA1nna/giphy.gif") // Adiciona um GIF para deixar mais engraçado (opcional)
-        .setTimestamp()
-        .setFooter({ text: "Piada de qualidade duvidosa." });
+        .setColor(randomColor)
+        .setTitle("🎉 Diversão Garantida!")
+        .setDescription(randomPhrase)
+        .setFooter({
+          text: `Solicitado por ${interaction.user.username}`,
+          iconURL: interaction.user.displayAvatarURL(),
+        });
 
       // Responde à interação com o embed
       await interaction.reply({ embeds: [embed] });

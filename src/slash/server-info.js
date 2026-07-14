@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const mongoose = require("mongoose");
-const UsersRepository = require("../database/mongoose/UsersRepository");
+const { COLORS, SEP, formatMoney } = require("../utils/EmbedStyle");
 const UserSchema = require("../database/schemas/UserSchema");
-mongoose.model("Users", UserSchema);
+if (!mongoose.models.Users) mongoose.model("Users", UserSchema);
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -17,24 +17,30 @@ module.exports = {
 
       const serverName = guild.name;
       const serverIcon = guild.iconURL({ dynamic: true, size: 1024 });
-      const serverCreationDate = guild.createdAt.toLocaleDateString("pt-BR");
+      const serverCreationDate = `<t:${Math.floor(guild.createdTimestamp / 1000)}:D> (<t:${Math.floor(guild.createdTimestamp / 1000)}:R>)`;
       const totalMembers = guild.memberCount;
       const totalChannels = guild.channels.cache.size;
+      const boostCount = guild.premiumSubscriptionCount || 0;
+      const boostTier = guild.premiumTier || 0;
+      const emojiCount = guild.emojis.cache.size;
 
-      // Estatísticas armazenadas no banco
-      const totalServerStats = await getTotalServerStats();
+      // Estatísticas armazenadas no banco usando Aggregation para melhor performance
+      const totalServerStats = await getTotalServerStats(guild.id);
 
       // Construindo o embed
       const embed = new EmbedBuilder()
-        .setColor("#5865F2") // Roxo padrão Discord
+        .setColor(COLORS.INFO)
         .setTitle(`📌 Informações do servidor: ${serverName}`)
-        .setThumbnail(serverIcon) // Ícone do servidor
+        .setThumbnail(serverIcon)
+        .setDescription(`${SEP}`)
         .addFields(
-          { name: "📅 Criado em", value: serverCreationDate, inline: true },
-          { name: "👥 Membros", value: `${totalMembers}`, inline: true },
+          { name: "📅 Criado em", value: serverCreationDate, inline: false },
+          { name: "👥 Membros", value: `${totalMembers.toLocaleString()}`, inline: true },
           { name: "📂 Canais", value: `${totalChannels}`, inline: true },
-          { name: "💬 Mensagens registradas", value: `${totalServerStats.totalMessages}`, inline: true },
-          { name: "🎙️ Tempo em chamadas", value: `${totalServerStats.totalVoiceTime} minutos`, inline: true },
+          { name: "😊 Emojis", value: `${emojiCount}`, inline: true },
+          { name: "✨ Boosts", value: `Nível ${boostTier} (${boostCount} boosts)`, inline: false },
+          { name: "💬 Mensagens Registradas", value: `${formatMoney(totalServerStats.totalMessages).replace('$', '')}`, inline: true },
+          { name: "🎙️ Tempo em Voz", value: `${formatMoney(totalServerStats.totalVoiceTime).replace('$', '')} minutos`, inline: true },
         )
         .setFooter({ text: `ID do Servidor: ${guild.id}` })
         .setTimestamp();
@@ -43,29 +49,28 @@ module.exports = {
 
     } catch (error) {
       console.error("Erro ao obter informações do servidor:", error);
-      await interaction.reply({
-        content: "❌ Ocorreu um erro ao obter informações do servidor.",
-        ephemeral: true,
+      const { error: errorEmbed } = require("../utils/EmbedStyle");
+      await interaction.editReply({
+        embeds: [errorEmbed("Erro", "Ocorreu um erro ao obter informações do servidor.")]
       });
     }
   },
 };
 
-async function getTotalServerStats() {
-  let totalVoiceTime = 0;
-  let totalMessages = 0;
-
+async function getTotalServerStats(guildId) {
   try {
-    const userRepo = new UsersRepository(mongoose, "Users");
-    const allUsers = await userRepo.findAll();
+    const UserModel = mongoose.model("Users");
+    const result = await UserModel.aggregate([
+      { $match: { idguild: guildId } },
+      { $group: { _id: null, totalMessages: { $sum: "$totalMessages" }, totalVoiceTime: { $sum: "$voiceTime" } } }
+    ]);
 
-    for (const user of allUsers) {
-      if (user.voiceTime != null) totalVoiceTime += user.voiceTime;
-      if (user.totalMessages != null) totalMessages += user.totalMessages;
+    if (result.length > 0) {
+        return { totalVoiceTime: result[0].totalVoiceTime || 0, totalMessages: result[0].totalMessages || 0 };
     }
   } catch (error) {
-    console.error("Erro ao obter informações de usuários do banco:", error);
+    console.error("Erro ao obter informações de usuários do banco via aggregate:", error);
   }
 
-  return { totalVoiceTime, totalMessages };
+  return { totalVoiceTime: 0, totalMessages: 0 };
 }

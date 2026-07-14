@@ -17,8 +17,6 @@ module.exports = class MongoDB extends DBWrapper {
 
   async connect() {
     const OPTIONS = {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
       autoIndex: false, // Recommended for production
       connectTimeoutMS: 10000,
       socketTimeoutMS: 45000,

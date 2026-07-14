@@ -1,6 +1,7 @@
-const { EmbedBuilder } = require("discord.js");
 const mongoose = require("mongoose");
 const JOBS = require("../../utils/jobs");
+const { COLORS, SEP, cooldownMsg, formatMoney, success, error, warning } = require("../../utils/EmbedStyle");
+const { EmbedBuilder } = require("discord.js");
 const ROB_COOLDOWN = 7200000; // 2h
 
 module.exports = {
@@ -18,29 +19,29 @@ module.exports = {
 
         const now = Date.now();
 
-        if (targetUser.id === userId) return interaction.editReply("❌ Você não pode se roubar (mas seria poético).");
-        if (targetUser.bot) return interaction.editReply("❌ Não mexa com robôs. Eles sabem onde você mora.");
+        if (targetUser.id === userId) return interaction.editReply({ embeds: [error("Roubo Falhou", "Você não pode se roubar (mas seria poético).")] });
+        if (targetUser.bot) return interaction.editReply({ embeds: [error("Roubo Falhou", "Não mexa com robôs. Eles sabem onde você mora.")] });
 
         const lastRob = userData.lastRob || 0;
         if (now - lastRob < ROB_COOLDOWN) {
-            const waitMin = Math.ceil((lastRob + ROB_COOLDOWN - now) / 60000);
-            return interaction.editReply(`🚓 A polícia está de olho! Espere a poeira baixar (**${waitMin} minutos**).`);
+            const nextRob = lastRob + ROB_COOLDOWN;
+            return interaction.editReply({ embeds: [warning("🚓 Polícia de Olho!", `Aguarde a poeira baixar antes de tentar outro roubo.\n\n${cooldownMsg(nextRob)}`)] });
         }
 
         // Check Victim
         let victimData = await UserModel.findOne({ codigouser: targetUser.id, idguild: guildId });
         if (!victimData || (victimData.money || 0) < 50) {
-            return interaction.editReply(`😐 **${targetUser.username}** é tão pobre que não vale o esforço (menos de $50 na carteira).`);
+            return interaction.editReply({ embeds: [warning("Roubo Falhou", `**${targetUser.username}** é tão pobre que não vale o esforço (menos de $50 na carteira).`)] });
         }
 
         // Check Robber Wallet
         if ((userData.money || 0) < 200) {
-            return interaction.editReply(`🚫 Você precisa de pelo menos **$200** para subornar a polícia caso seja pego.`);
+            return interaction.editReply({ embeds: [warning("Roubo Falhou", "Você precisa de pelo menos **$200** na carteira para tentar subornar a polícia caso seja pego.")] });
         }
 
         // Check Protection
         if (victimData.protectionExpires && victimData.protectionExpires > now) {
-            return interaction.editReply(`🔒 **${targetUser.username}** está protegido por Algemas de Ouro! Seu roubo falhou miseravelmente.`);
+            return interaction.editReply({ embeds: [error("Roubo Falhou", `🔒 **${targetUser.username}** está protegido por Algemas de Ouro! Seu roubo falhou miseravelmente.`)] });
         }
 
         // Calculate success chance with job bonuses
@@ -50,7 +51,7 @@ module.exports = {
         // Hacker bonus: +15% rob chance
         if (userData.job && JOBS[userData.job]?.bonus?.robChance) {
             baseChance += JOBS[userData.job].bonus.robChance;
-            bonusText = ` (Hacker: +${Math.round(JOBS[userData.job].bonus.robChance * 100)}%)`;
+            bonusText = `\n💻 **Hacker:** +${Math.round(JOBS[userData.job].bonus.robChance * 100)}%`;
         }
 
         // Mafioso bonus: allStats 1.5x (applies to rob chance too)
@@ -84,16 +85,20 @@ module.exports = {
         if (victimDefended) {
             userData.lastRob = now;
             await userData.save();
-            return interaction.editReply(`🐶 **DEFESA!** O ${defenseSource} de ${targetUser.username} latiu e você fugiu sem roubar nada!`);
+            const embed = new EmbedBuilder()
+                .setTitle("🐶 Defesa Bem Sucedida!")
+                .setColor(COLORS.INFO)
+                .setDescription(`O **${defenseSource}** de **${targetUser.username}** reagiu e você fugiu de mãos vazias!`);
+            return interaction.editReply({ embeds: [embed] });
         }
 
-        const success = Math.random() < baseChance;
+        const successRob = Math.random() < baseChance;
 
-        if (success) {
+        if (successRob) {
             const stealPercent = (Math.random() * 0.20) + 0.10;
             const stolen = Math.floor(victimData.money * stealPercent);
 
-            if (stolen <= 0) return interaction.editReply("🤷‍♂️ Você tentou roubar, mas os bolsos dele estavam furados.");
+            if (stolen <= 0) return interaction.editReply({ embeds: [warning("Roubo Falhou", "Você tentou roubar, mas os bolsos dele estavam furados.")] });
 
             victimData.money -= stolen;
             userData.money += stolen;
@@ -114,11 +119,11 @@ module.exports = {
                     if (logChannel) {
                         const logEmbed = new EmbedBuilder()
                             .setTitle("🔫 Log de Crime (Roubo)")
-                            .setColor("#FF0000")
+                            .setColor(COLORS.CRIME)
                             .addFields(
                                 { name: "Ladrão", value: `${interaction.user.tag} (ID: ${userId})`, inline: true },
                                 { name: "Vítima", value: `${targetUser.tag} (ID: ${targetUser.id})`, inline: true },
-                                { name: "Roubado", value: `$${stolen.toLocaleString()}`, inline: false }
+                                { name: "Roubado", value: formatMoney(stolen), inline: false }
                             )
                             .setTimestamp();
                         logChannel.send({ embeds: [logEmbed] });
@@ -126,7 +131,18 @@ module.exports = {
                 }
             } catch (e) { console.error(e); }
 
-            return interaction.editReply(`🔫 **SUCESSO!** Você roubou **$${stolen}** de <@${targetUser.id}>!\n*(Ele perdeu ${Math.floor(stealPercent * 100)}% da carteira)*`);
+            const embed = new EmbedBuilder()
+                .setTitle("🔫 Roubo Bem Sucedido!")
+                .setColor(COLORS.SUCCESS)
+                .setDescription(`${SEP}\nVocê assaltou <@${targetUser.id}> com sucesso!\n${SEP}`)
+                .addFields(
+                    { name: "💰 Lucro", value: formatMoney(stolen) + bonusText, inline: true },
+                    { name: "💸 Perda da Vítima", value: `${Math.floor(stealPercent * 100)}% da carteira`, inline: true }
+                )
+                .setFooter({ text: "O crime compensa... às vezes." })
+                .setTimestamp();
+
+            return interaction.editReply({ embeds: [embed] });
         } else {
             // FAIL - Apply fine but prevent negative balance
             const fine = Math.min(500, userData.money);  // Can't go negative
@@ -134,7 +150,12 @@ module.exports = {
             userData.lastRob = now;
             await userData.save();
 
-            return interaction.editReply(`🚓 **PRESO EM FLAGRANTE!**\nA polícia te pegou. Você pagou **$${fine}** de suborno para ser solto.`);
+            const embed = new EmbedBuilder()
+                .setTitle("🚓 Preso em Flagrante!")
+                .setColor(COLORS.ERROR)
+                .setDescription(`${SEP}\nA polícia te pegou no ato!\n${SEP}\n**Penalidade:** Você pagou **${formatMoney(fine)}** de suborno para não ser preso.`);
+
+            return interaction.editReply({ embeds: [embed] });
         }
     }
 };

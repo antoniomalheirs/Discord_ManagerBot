@@ -6,6 +6,7 @@ const JOBS = require("../../utils/jobs");
 const BACKGROUNDS = require("../../utils/backgrounds");
 const GuildSchema = require("../../database/schemas/GuildSchema");
 const GuildModel = mongoose.models.Guilds || mongoose.model("Guilds", GuildSchema);
+const { COLORS, SEP, formatMoney, success, error, warning } = require("../../utils/EmbedStyle");
 
 module.exports = {
     async execute(interaction) {
@@ -47,13 +48,13 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setTitle("🏦 Central de Economia")
-                .setColor("#DAA520")
+                .setColor(COLORS.ECONOMY)
                 .setThumbnail(interaction.user.displayAvatarURL())
-                .setDescription(`Bem-vindo, **${interaction.user.username}**!\n\n🏅 **Conquistas:** ${badgeStr}\n\nSelecione uma categoria abaixo para gerenciar sua economia.`)
+                .setDescription(`${SEP}\nBem-vindo, **${interaction.user.username}**!\n\n🏅 **Conquistas:** ${badgeStr}\n${SEP}\nSelecione uma categoria abaixo para gerenciar sua economia.`)
                 .addFields(
-                    { name: "💵 Carteira", value: `$${money.toLocaleString()}`, inline: true },
-                    { name: "🏦 Banco", value: `$${bank.toLocaleString()}`, inline: true },
-                    { name: "💰 Total", value: `$${(money + bank).toLocaleString()}`, inline: true },
+                    { name: "💵 Carteira", value: formatMoney(money), inline: true },
+                    { name: "🏦 Banco", value: formatMoney(bank), inline: true },
+                    { name: "💰 Total", value: formatMoney(money + bank), inline: true },
                     { name: "👔 Profissão", value: job, inline: true },
                     { name: "🐾 Pet", value: pet, inline: true },
                     { name: "⚡ Energia", value: `${user.energy || 50}/50`, inline: true }
@@ -98,11 +99,8 @@ module.exports = {
                 if (i.customId === "central_bank") {
                     const bankEmbed = new EmbedBuilder()
                         .setTitle("💰 Banco")
-                        .setColor("#2ECC71")
-                        .addFields(
-                            { name: "💵 Carteira", value: `$${(freshUser.money || 0).toLocaleString()}`, inline: true },
-                            { name: "🏦 Banco", value: `$${(freshUser.bank || 0).toLocaleString()}`, inline: true }
-                        )
+                        .setColor(COLORS.ECONOMY)
+                        .setDescription(`${SEP}\nGerencie seus fundos.\n\nSaldo Banco: **${formatMoney(freshUser.bank || 0)}**\nSaldo Carteira: **${formatMoney(freshUser.money || 0)}**\n${SEP}`)
                         .setFooter({ text: "Escolha uma ação" });
 
                     const bankRow1 = new ActionRowBuilder().addComponents(
@@ -685,11 +683,18 @@ module.exports = {
 
                         return i.reply({ content: `🔫 **SUCESSO!** Você roubou **$${stolen.toLocaleString()}** de <@${targetId}>!`, ephemeral: true });
                     } else {
-                        const fine = Math.min(500, freshUser.money);
-                        freshUser.money -= fine;
-                        freshUser.lastRob = now;
-                        await freshUser.save();
-                        return i.reply({ content: `🚓 **PRESO!** A polícia te pegou. Multa: **$${fine}**.`, ephemeral: true });
+                        if (freshUser.trollShieldExpires > now) {
+                            freshUser.lastRob = now;
+                            freshUser.trollShieldExpires = 0; // Consume shield
+                            await freshUser.save();
+                            return i.reply({ content: `🚓 **A polícia te pegou!** Mas o **Escudo Anti-Troll** anulou a sua multa!`, ephemeral: true });
+                        } else {
+                            const fine = Math.min(500, freshUser.money);
+                            freshUser.money -= fine;
+                            freshUser.lastRob = now;
+                            await freshUser.save();
+                            return i.reply({ content: `🚓 **PRESO!** A polícia te pegou. Multa: **$${fine}**.`, ephemeral: true });
+                        }
                     }
                 }
 
@@ -808,7 +813,8 @@ module.exports = {
                     const balance = freshUser.bank || 0;
                     if (balance < 1000) return i.reply({ content: "❌ Saldo muito baixo para render juros (Min: $1.000).", ephemeral: true });
 
-                    const rate = 0.01; // 1%
+                    let rate = 0.01; // 1%
+                    if (freshUser.job === "Banker") rate *= 2; // Banker bonus
                     const interest = Math.floor(balance * rate);
 
                     freshUser.bank = balance + interest;

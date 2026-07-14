@@ -1,16 +1,11 @@
 const { EmbedBuilder } = require("discord.js");
 const mongoose = require("mongoose");
 const UsersRepository = require("../../database/mongoose/UsersRepository");
+const { COLORS, SEP, formatMoney } = require("../../utils/EmbedStyle");
 
 module.exports = {
     async execute(interaction) {
         try {
-            // Subcommand in main command will be 'leaderboard' then 'xp' or 'money'.
-            // Interaction options will handle the subcommand group or subcommand.
-            // If interaction.options.getSubcommand() works even if nested? Yes.
-            // But we need to check if we are using groups.
-            // If /economy leaderboard xp -> subcommand is xp.
-            // If /economy leaderboard money -> subcommand is money.
             let sub = interaction.options.getSubcommand(false);
             if (!sub) sub = "xp";
 
@@ -34,9 +29,9 @@ module.exports = {
 
                 embedConfig = {
                     title: `💰 Top 10 Bilionários - ${interaction.guild.name}`,
-                    desc: "Os reis do Cassino (carteira + banco).",
-                    color: "#00FF00",
-                    format: (u) => `💰 **$${u.totalMoney.toLocaleString()}** (💵${(u.money || 0).toLocaleString()} + 🏦${(u.bank || 0).toLocaleString()})`
+                    desc: `Os reis da economia (carteira + banco).\n${SEP}`,
+                    color: COLORS.ECONOMY,
+                    format: (u) => `**${formatMoney(u.totalMoney)}**\n└ 💵 ${formatMoney(u.money || 0)}  |  🏦 ${formatMoney(u.bank || 0)}`
                 };
             } else {
                 sortedUsers = allUsers.map(user => {
@@ -51,12 +46,12 @@ module.exports = {
 
                 embedConfig = {
                     title: `🏆 Ranking Global (XP) - ${interaction.guild.name}`,
-                    desc: "Os membros mais ativos do servidor.",
-                    color: "#FFD700",
+                    desc: `Os membros mais ativos do servidor.\n${SEP}`,
+                    color: COLORS.RANK,
                     format: (u) => {
                         let xpDisplay = u.xp;
                         if (u.xp >= 1000) xpDisplay = (u.xp / 1000).toFixed(1) + "k";
-                        return `**Lvl ${u.level}** • ${xpDisplay} XP`;
+                        return `**Lvl ${u.level}**\n└ ${xpDisplay} XP Totais`;
                     }
                 };
             }
@@ -64,24 +59,24 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setTitle(embedConfig.title)
                 .setColor(embedConfig.color)
-                .setThumbnail(interaction.guild.iconURL())
+                .setThumbnail(interaction.guild.iconURL({ dynamic: true }))
                 .setDescription(embedConfig.desc);
 
-            let description = "";
+            let description = embedConfig.desc + "\n";
             const medals = ["🥇", "🥈", "🥉"];
 
             if (sortedUsers.length === 0) {
-                description = "Ninguém pontuou nessa categoria ainda.";
+                description += "Ninguém pontuou nessa categoria ainda.";
             } else {
                 for (let i = 0; i < sortedUsers.length; i++) {
                     const u = sortedUsers[i];
                     const medal = i < 3 ? medals[i] : `**#${i + 1}**`;
-                    description += `${medal} <@${u.codigouser}> \n└ ${embedConfig.format(u)}\n\n`;
+                    description += `${medal} <@${u.codigouser}>\n${embedConfig.format(u)}\n\n`;
                 }
             }
 
             embed.setDescription(description);
-            embed.setFooter({ text: "Use /economy rank para detalhes.", iconURL: interaction.user.displayAvatarURL() });
+            embed.setFooter({ text: "Use /economy rank para ver seu perfil detalhado.", iconURL: interaction.user.displayAvatarURL() });
 
             await interaction.editReply({ embeds: [embed] });
 

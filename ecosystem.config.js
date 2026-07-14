@@ -3,8 +3,8 @@ module.exports = {
         name: "DiscordManager",
         script: "./index.js",
         watch: false,
-        max_memory_restart: "1G",
-        exec_mode: "cluster",
+        max_memory_restart: "512M",
+        exec_mode: "fork",
         instances: 1,
         env: {
             NODE_ENV: "development",

@@ -1,4 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require("discord.js");
+const { COLORS, SEP, formatMoney } = require("../../utils/EmbedStyle");
 const COST_PER_PLAY = 1;
 
 module.exports = {
@@ -30,12 +31,13 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setTitle("🃏 Blackjack")
-            .setColor("#2F3136")
-            .setDescription(`Aposta: **${aposta}** moedas`)
+            .setColor(COLORS.CASINO)
+            .setDescription(`${SEP}\n💰 **Aposta:** ${formatMoney(aposta)}\n${SEP}`)
             .addFields(
-                { name: `Sua Mão (${playerScore})`, value: formatHand(playerHand), inline: true },
-                { name: `Dealer`, value: `${dealerHand[0].text} | 🂠 ?`, inline: true }
-            );
+                { name: `🎴 Sua Mão (${playerScore})`, value: `\`${formatHand(playerHand)}\``, inline: true },
+                { name: `🎴 Dealer`, value: `\`${dealerHand[0].text} | 🂠 ?\``, inline: true }
+            )
+            .setFooter({ text: `Saldo atual: ${formatMoney(userData.money)}` });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('hit').setLabel('Pedir (Hit)').setStyle(ButtonStyle.Success).setEmoji('🃏'),
@@ -149,11 +151,11 @@ async function endGame(interaction, type, reason, playerHand, dealerHand, aposta
     const playerScore = calculateScore(playerHand);
     const dealerScore = calculateScore(dealerHand);
 
-    let color = "#FF0000";
+    let color = COLORS.ERROR;
     let winAmount = 0;
 
     if (type === "win") {
-        color = "#00FF00";
+        color = COLORS.SUCCESS;
         // NERFED: 1.9x Payout (House Edge 10%)
         // BLACKJACK BONUS: 2.2x 
         let multiplier = 1.9;
@@ -174,21 +176,24 @@ async function endGame(interaction, type, reason, playerHand, dealerHand, aposta
 
         userData.money += winAmount;
     } else if (type === "push") {
-        color = "#FFFF00";
+        color = COLORS.WARNING;
         winAmount = aposta; // Devolve
         userData.money += winAmount;
     }
 
     await userData.save();
 
+    const resultEmoji = type === "win" ? "🎉" : type === "push" ? "🤝" : "💀";
     const embed = new EmbedBuilder()
-        .setTitle(`🃏 Fim de Jogo: ${reason}`)
+        .setTitle(`${resultEmoji} ${reason}`)
         .setColor(color)
+        .setDescription(type === "win" ? `Você ganhou **${formatMoney(winAmount)}**!` : type === "push" ? `Aposta devolvida.` : `Você perdeu **${formatMoney(aposta)}**.`)
         .addFields(
-            { name: `Sua Mão (${playerScore})`, value: formatHand(playerHand), inline: true },
-            { name: `Dealer (${dealerScore})`, value: formatHand(dealerHand), inline: true }
+            { name: `🎴 Sua Mão (${playerScore})`, value: `\`${formatHand(playerHand)}\``, inline: true },
+            { name: `🎴 Dealer (${dealerScore})`, value: `\`${formatHand(dealerHand)}\``, inline: true }
         )
-        .setFooter({ text: `Saldo: ${userData.money}` });
+        .setFooter({ text: `💰 Saldo: ${formatMoney(userData.money)}` })
+        .setTimestamp();
 
     await interaction.update({ embeds: [embed], components: [] });
 }
